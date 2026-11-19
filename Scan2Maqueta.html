@@ -1,0 +1,409 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Scan2Maqueta</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: visor 3D a la izquierda (escenario de maqueta), panel de control tipo mesa de trabajo a la derecha. */
+:root{
+  --bg:#eceee9; --surface:#f7f8f5; --stage:#dfe4dc; --fg:#1b241d; --muted:#5b685e; --line:#cfd5cb;
+  --accent:#d4610f; --accent-fg:#fff; --good:#2e7d4f;
+  --f-display:'Space Grotesk',system-ui,sans-serif; --f-body:'Inter',system-ui,sans-serif; --f-mono:'JetBrains Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141a16; --surface:#1c241f; --stage:#222c25; --fg:#e6ebe4; --muted:#93a196; --line:#2f3b33; --accent:#f0813a; --accent-fg:#1a1006; --good:#6fcf97; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141a16; --surface:#1c241f; --stage:#222c25; --fg:#e6ebe4; --muted:#93a196; --line:#2f3b33; --accent:#f0813a; --accent-fg:#1a1006; --good:#6fcf97; color-scheme:dark}
+html,body{height:auto}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px}
+.wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;align-items:baseline;gap:12px 20px;flex-wrap:wrap}
+h1{font-family:var(--f-display);font-size:26px;letter-spacing:-.01em;margin:0}
+header p{margin:0;color:var(--muted);max-width:60ch}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+@media(max-width:900px){.main{grid-template-columns:minmax(0,1fr)}}
+.stage{position:relative;background:var(--stage);border:1px solid var(--line);border-radius:6px;overflow:hidden;aspect-ratio:4/3;min-height:320px}
+.stage canvas{display:block;width:100%;height:100%}
+.badge{position:absolute;left:12px;top:12px;font:500 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;
+  background:var(--surface);color:var(--muted);padding:4px 8px;border-radius:3px;border:1px solid var(--line)}
+.hint{position:absolute;right:12px;bottom:10px;font:400 11px var(--f-mono);color:var(--muted)}
+.busy[hidden]{display:none}
+.busy{position:absolute;inset:0;display:grid;place-items:center;background:color-mix(in srgb,var(--stage) 80%,transparent);font-family:var(--f-mono);font-size:13px}
+aside{display:flex;flex-direction:column;gap:14px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px;display:flex;flex-direction:column;gap:12px;min-width:0}
+h2{font:600 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
+.drop{border:1.5px dashed var(--line);border-radius:6px;padding:14px;text-align:center;color:var(--muted);transition:border-color .15s,background .15s}
+.drop.over{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+button,.btn{font:600 13px var(--f-body);border-radius:4px;padding:9px 14px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer}
+button:hover,.btn:hover{border-color:var(--muted)}
+.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.primary:hover{border-color:var(--accent);filter:brightness(1.07)}
+button:focus-visible,.btn:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button:disabled{opacity:.5;cursor:default}
+.ctl{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center}
+.ctl label{font-weight:500}
+.ctl output{font:400 12px var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.ctl input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent)}
+.check{display:flex;gap:8px;align-items:center}
+dl{margin:0;display:grid;grid-template-columns:1fr auto;gap:6px 12px}
+dt{color:var(--muted)} dd{margin:0;font:500 13px var(--f-mono);font-variant-numeric:tabular-nums;text-align:right}
+.thumbs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.thumbs figure{margin:0;display:flex;flex-direction:column;gap:4px}
+.thumbs canvas{width:100%;height:auto;border-radius:3px;border:1px solid var(--line);display:block}
+figcaption{font:400 11px var(--f-mono);color:var(--muted)}
+.note{color:var(--muted);font-size:12px;margin:0}
+.msg{font-size:12px;color:var(--muted);min-height:1.2em;margin:0}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Scan2Maqueta</h1>
+    <p>Haz una foto del terreno (mejor vista cenital) y obtén una maqueta 3D con terreno, bloque de diorama, árboles y edificios.</p>
+  </header>
+
+  <div class="main">
+    <div class="stage" id="stage">
+      <canvas id="gl" aria-label="Maqueta 3D, arrastra para girar"></canvas>
+      <span class="badge" id="badge">Ejemplo</span>
+      <span class="hint">arrastrar = girar · rueda = zoom · dos dedos = mover</span>
+      <div class="busy" id="busy" hidden>Procesando…</div>
+    </div>
+
+    <aside>
+      <section class="card">
+        <h2>1 · Escanear</h2>
+        <div class="drop" id="drop">
+          <div class="row" style="justify-content:center">
+            <label class="btn primary" for="file">Hacer foto / subir imagen</label>
+            <button id="demo" type="button">Usar ejemplo</button>
+          </div>
+          <input id="file" type="file" accept="image/*" capture="environment" hidden>
+          <p class="note" style="margin-top:8px">También puedes arrastrar una imagen aquí. En el móvil se abre la cámara.</p>
+        </div>
+        <div class="thumbs">
+          <figure><canvas id="cv-src" width="160" height="120"></canvas><figcaption>Imagen</figcaption></figure>
+          <figure><canvas id="cv-seg" width="160" height="120"></canvas><figcaption>Detección</figcaption></figure>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>2 · Ajustar</h2>
+        <div class="ctl"><label for="relief">Relieve</label><output id="o-relief"></output>
+          <input id="relief" type="range" min="0" max="30" step="1" value="8"></div>
+        <div class="ctl"><label for="spacing">Separación de árboles</label><output id="o-spacing"></output>
+          <input id="spacing" type="range" min="4" max="20" step="1" value="8"></div>
+        <div class="ctl"><label for="tsize">Tamaño de árboles</label><output id="o-tsize"></output>
+          <input id="tsize" type="range" min="0.5" max="2" step="0.1" value="1"></div>
+        <label class="check"><input id="spin" type="checkbox" checked> Giro automático</label>
+      </section>
+
+      <section class="card">
+        <h2>3 · Resultado</h2>
+        <dl>
+          <dt>Árboles</dt><dd id="s-trees">–</dd>
+          <dt>Edificios</dt><dd id="s-bld">–</dd>
+          <dt>Agua</dt><dd id="s-water">–</dd>
+          <dt>Caminos</dt><dd id="s-road">–</dd>
+          <dt>Triángulos</dt><dd id="s-tri">–</dd>
+        </dl>
+        <div class="row">
+          <button id="dl" class="primary" type="button">Descargar maqueta (.glb en zip)</button>
+          <button id="png" type="button">Captura PNG</button>
+        </div>
+        <p class="msg" id="msg" role="status"></p>
+        <p class="note">La altura se estima por luminosidad, sin IA. Para relieve con IA real (Depth Anything V2) usa el script Python.</p>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const AW=640, TEX=1024, WU=400, BASE=22, NX=170;
+
+/* ---------------- utilidades de imagen ---------------- */
+function boxBlur(src,W,H,r){ // desenfoque de caja separable
+  const tmp=new Float32Array(W*H), out=new Float32Array(W*H), n=2*r+1;
+  for(let y=0;y<H;y++){let s=0,o=y*W;
+    for(let x=-r;x<=r;x++)s+=src[o+Math.min(W-1,Math.max(0,x))];
+    for(let x=0;x<W;x++){tmp[o+x]=s/n;s+=src[o+Math.min(W-1,x+r+1)]-src[o+Math.max(0,x-r)];}}
+  for(let x=0;x<W;x++){let s=0;
+    for(let y=-r;y<=r;y++)s+=tmp[Math.min(H-1,Math.max(0,y))*W+x];
+    for(let y=0;y<H;y++){out[y*W+x]=s/n;s+=tmp[Math.min(H-1,y+r+1)*W+x]-tmp[Math.max(0,y-r)*W+x];}}
+  return out;
+}
+function maxFilter(src,W,H,r){
+  const tmp=new Float32Array(W*H), out=new Float32Array(W*H);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){let m=-1e9;
+    for(let k=Math.max(0,x-r);k<=Math.min(W-1,x+r);k++){const v=src[y*W+k];if(v>m)m=v;} tmp[y*W+x]=m;}
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){let m=-1e9;
+    for(let k=Math.max(0,y-r);k<=Math.min(H-1,y+r);k++){const v=tmp[k*W+x];if(v>m)m=v;} out[y*W+x]=m;}
+  return out;
+}
+function majority(mask,W,H){ // limpia ruido: 3x3
+  const out=new Uint8Array(W*H);
+  for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){let c=0;
+    for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++)c+=mask[(y+j)*W+x+i];
+    out[y*W+x]=c>=5?1:0;}
+  return out;
+}
+function components(mask,W,H){
+  const lab=new Int32Array(W*H), comps=[], st=[];
+  for(let i=0;i<W*H;i++){ if(!mask[i]||lab[i])continue;
+    const id=comps.length+1; let a=0,x0=W,y0=H,x1=0,y1=0,sx=0,sy=0; st.push(i); lab[i]=id;
+    while(st.length){const p=st.pop(),x=p%W,y=(p/W)|0; a++;sx+=x;sy+=y;
+      if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;
+      for(let j=-1;j<=1;j++)for(let k=-1;k<=1;k++){const nx=x+k,ny=y+j; if(nx<0||ny<0||nx>=W||ny>=H)continue;
+        const q=ny*W+nx; if(mask[q]&&!lab[q]){lab[q]=id;st.push(q);}}}
+    comps.push({id,area:a,x0,y0,x1,y1,w:x1-x0+1,h:y1-y0+1,cx:sx/a,cy:sy/a});}
+  return {lab,comps};
+}
+
+/* ---------------- análisis de la imagen ---------------- */
+function analyze(srcCanvas){
+  const asp=srcCanvas.height/srcCanvas.width, W=AW, H=Math.round(AW*asp);
+  const c=document.createElement('canvas'); c.width=W; c.height=H;
+  const cx=c.getContext('2d',{willReadFrequently:true}); cx.drawImage(srcCanvas,0,0,W,H);
+  const d=cx.getImageData(0,0,W,H).data, N=W*H;
+  const R=new Float32Array(N),G=new Float32Array(N),B=new Float32Array(N),V=new Float32Array(N),L=new Float32Array(N);
+  const water=new Uint8Array(N),veg=new Uint8Array(N),road=new Uint8Array(N),roof=new Uint8Array(N);
+  for(let i=0;i<N;i++){
+    const r=d[i*4],g=d[i*4+1],b=d[i*4+2]; R[i]=r;G[i]=g;B[i]=b;
+    const mx=Math.max(r,g,b),mn=Math.min(r,g,b),dl=mx-mn; V[i]=mx; L[i]=.299*r+.587*g+.114*b;
+    const s=mx?dl/mx:0; let h=0;
+    if(dl){ if(mx===r)h=((g-b)/dl)%6; else if(mx===g)h=(b-r)/dl+2; else h=(r-g)/dl+4; h*=60; if(h<0)h+=360; }
+    water[i]=(h>180&&h<260&&s>.27&&mx>50)?1:0;
+    veg[i]=(h>60&&h<180&&s>.16&&mx>25)?1:0;
+    road[i]=(s<.29&&mx>170)?1:0;
+    roof[i]=((h<22||h>340)&&s>.43&&mx>70)?1:0;
+  }
+  const wM=majority(water,W,H), vM=majority(veg,W,H); let rM=majority(road,W,H);
+  for(let i=0;i<N;i++) if(wM[i]) rM[i]=0;
+  // edificios: tejados rojizos + manchas claras compactas
+  const amin=N*0.00015, buildings=[];
+  const accept=(c,loose)=>{
+    if(c.area<amin*0.6||c.area>N*0.03)return false;
+    const asp=Math.max(c.w,c.h)/Math.max(1,Math.min(c.w,c.h)); if(Math.min(c.w,c.h)<3||asp>3.2)return false;
+    return c.area/(c.w*c.h)>(loose?0.75:0.8);};
+  const roofC=components(majority(roof,W,H),W,H);
+  for(const c of roofC.comps) if(accept(c,true)) buildings.push(c);
+  const roadC=components(rM,W,H);
+  for(const c of roadC.comps){ if(c.area<N*0.01&&accept(c,false)){buildings.push(c); for(let i=0;i<N;i++) if(roadC.lab[i]===c.id) rM[i]=0;} }
+  // altura: luminosidad suavizada sin copas ni edificios (convolución normalizada)
+  const bM=new Uint8Array(N); for(const c of buildings) for(let y=c.y0;y<=c.y1;y++)for(let x=c.x0;x<=c.x1;x++)bM[y*W+x]=1;
+  const ok=new Float32Array(N), lm=new Float32Array(N);
+  for(let i=0;i<N;i++){const w=(vM[i]||bM[i])?0:1; ok[i]=w; lm[i]=L[i]*w;}
+  const bl=boxBlur(lm,W,H,Math.round(W/14)), bo=boxBlur(ok,W,H,Math.round(W/14));
+  const h=new Float32Array(N); let lo=1e9,hi=-1e9;
+  for(let i=0;i<N;i++){h[i]=bo[i]>0.02?bl[i]/bo[i]:L[i]; if(h[i]<lo)lo=h[i]; if(h[i]>hi)hi=h[i];}
+  for(let i=0;i<N;i++) h[i]=(h[i]-lo)/Math.max(1e-6,hi-lo);
+  return {W,H,N,R,G,B,V,veg:vM,water:wM,road:rM,buildings,height:h,
+          pct:{water:wM.reduce((a,b)=>a+b,0)/N,road:rM.reduce((a,b)=>a+b,0)/N}};
+}
+function detectTrees(a,r){
+  const {W,H,N}=a, s=new Float32Array(N);
+  for(let i=0;i<N;i++) s[i]=(a.G[i]-Math.max(a.R[i],a.B[i]))+0.25*(255-a.V[i]);
+  const sc=boxBlur(s,W,H,Math.max(1,Math.round(r*0.35))), loc=boxBlur(sc,W,H,r*3), mx=maxFilter(sc,W,H,r), t=[];
+  for(let i=0;i<N;i++) if(a.veg[i]&&sc[i]===mx[i]&&sc[i]-loc[i]>5) t.push([i%W,(i/W)|0]);
+  return t;
+}
+
+/* ---------------- construcción de la maqueta ---------------- */
+const STRATA=[[96,128,58],[121,85,52],[150,110,70],[176,140,96],[134,106,80],[104,88,74]];
+function mkGeom(V,F,C,uv){
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(V,3));
+  if(C)g.setAttribute('color',new THREE.Float32BufferAttribute(C,3));
+  if(uv)g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  if(F)g.setIndex(F);
+  g.computeVertexNormals(); return g;
+}
+function sampleGrid(y,nx,ny,gx,gy){ // bilineal
+  gx=Math.min(nx-1.001,Math.max(0,gx)); gy=Math.min(ny-1.001,Math.max(0,gy));
+  const x0=gx|0,y0=gy|0,fx=gx-x0,fy=gy-y0, i=y0*nx+x0;
+  return (y[i]*(1-fx)+y[i+1]*fx)*(1-fy)+(y[i+nx]*(1-fx)+y[i+nx+1]*fx)*fy;
+}
+function build(a,trees,p,texCanvas){
+  const {W,H}=a, du=WU*H/W, nx=NX, ny=Math.round(NX*H/W);
+  // alturas
+  const hf=new Float32Array(nx*ny), wm=new Float32Array(nx*ny), rm=new Float32Array(nx*ny);
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){
+    const px=Math.min(W-1,Math.round(i/(nx-1)*(W-1))), py=Math.min(H-1,Math.round(j/(ny-1)*(H-1))), k=py*W+px;
+    hf[j*nx+i]=a.height[k]; wm[j*nx+i]=a.water[k]; rm[j*nx+i]=a.road[k];}
+  const hs=boxBlur(hf,nx,ny,2), ws=boxBlur(wm,nx,ny,1), rs=boxBlur(rm,nx,ny,1), sm=boxBlur(hf,nx,ny,4), y=new Float32Array(nx*ny);
+  for(let i=0;i<nx*ny;i++){
+    let v=BASE+p.relief*(hs[i]*(1-rs[i])+sm[i]*rs[i]);
+    v-=Math.min(1,ws[i]*3)*(p.relief*0.18+0.6); y[i]=v;}
+  const group=new THREE.Group();
+  // terreno
+  const V=[],UV=[],F=[];
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){V.push(i/(nx-1)*WU,y[j*nx+i],j/(ny-1)*du);UV.push(i/(nx-1),1-j/(ny-1));}
+  for(let j=0;j<ny-1;j++)for(let i=0;i<nx-1;i++){const A=j*nx+i,B=A+1,C=A+nx,D=C+1;F.push(A,C,B,B,C,D);}
+  const tex=new THREE.CanvasTexture(texCanvas); tex.anisotropy=4;
+  const terr=new THREE.Mesh(mkGeom(V,F,null,UV),new THREE.MeshStandardMaterial({map:tex,roughness:.95,metalness:0}));
+  terr.name='terreno'; group.add(terr);
+  // bloque con estratos
+  const bV=[],bC=[],bF=[]; let ymin=1e9; for(let i=0;i<nx*ny;i++) ymin=Math.min(ymin,y[i]); ymin-=1.2;
+  const strip=(pts)=>{ const n=pts.length;
+    const ys=pts.map(q=>[q[1],q[1]-1.2,Math.min(ymin,q[1]-1.2),ymin*.75,ymin*.5,ymin*.25,0]);
+    for(let b=0;b<6;b++){const base=bV.length/3,col=STRATA[b];
+      for(let k=0;k<n;k++){const jt=(Math.sin(k*12.9898+b*78.2)*43758.5453%1)*8;
+        bV.push(pts[k][0],ys[k][b],pts[k][2]); bC.push(...col.map(c=>(c+jt)/255));}
+      for(let k=0;k<n;k++){bV.push(pts[k][0],ys[k][b+1],pts[k][2]); bC.push(...col.map(c=>(c-8)/255));}
+      for(let k=0;k<n-1;k++) bF.push(base+k,base+n+k,base+k+1, base+k+1,base+n+k,base+n+k+1);}};
+  const e0=[],e1=[],e2=[],e3=[];
+  for(let i=0;i<nx;i++){e0.push([i/(nx-1)*WU,y[i],0]);e1.push([i/(nx-1)*WU,y[(ny-1)*nx+i],du]);}
+  for(let j=0;j<ny;j++){e2.push([0,y[j*nx],j/(ny-1)*du]);e3.push([WU,y[j*nx+nx-1],j/(ny-1)*du]);}
+  [e0,e1,e2,e3].forEach(strip);
+  {const base=bV.length/3; bV.push(0,0,0,WU,0,0,WU,0,du,0,0,du); for(let k=0;k<4;k++)bC.push(.27,.23,.2); bF.push(base,base+1,base+2,base,base+2,base+3);}
+  // orientar caras hacia fuera
+  const ctr=[WU/2,ymin/2,du/2];
+  for(let t=0;t<bF.length;t+=3){const [i0,i1,i2]=[bF[t],bF[t+1],bF[t+2]].map(i=>[bV[i*3],bV[i*3+1],bV[i*3+2]]);
+    const u=[i1[0]-i0[0],i1[1]-i0[1],i1[2]-i0[2]],v=[i2[0]-i0[0],i2[1]-i0[1],i2[2]-i0[2]];
+    const n=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]];
+    const c=[(i0[0]+i1[0]+i2[0])/3-ctr[0],(i0[1]+i1[1]+i2[1])/3-ctr[1],(i0[2]+i1[2]+i2[2])/3-ctr[2]];
+    if(n[0]*c[0]+n[1]*c[1]+n[2]*c[2]<0){const s=bF[t+1];bF[t+1]=bF[t+2];bF[t+2]=s;}}
+  const vcMat=()=>new THREE.MeshStandardMaterial({vertexColors:true,roughness:.9,metalness:0,side:THREE.DoubleSide});
+  const blk=new THREE.Mesh(mkGeom(bV,bF,bC),vcMat()); blk.name='bloque'; group.add(blk);
+  // árboles
+  const sx=WU/W, sz=du/H, unit=sx;
+  if(trees.length){
+    const can=new THREE.IcosahedronGeometry(1,1).toNonIndexed().attributes.position.array;
+    const trk=new THREE.CylinderGeometry(.16,.16,1,6).toNonIndexed().attributes.position.array;
+    const tV=[],tC=[]; let seed=7; const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+    const lim=4000, step=Math.max(1,trees.length/lim);
+    for(let q=0;q<trees.length;q+=step){const [tx,ty]=trees[Math.floor(q)], k=ty*W+tx;
+      const s=p.r*unit*0.62*p.tsize*(0.85+rnd()*.35);
+      const gh=sampleGrid(y,nx,ny,tx/W*(nx-1),ty/H*(ny-1))-0.2, px=tx*sx, pz=ty*sz;
+      const m=0.9+rnd()*.35;
+      const lc=[(a.R[k]*m+0)*.35+105*.65,(a.G[k]*m+18)*.35+165*.65,(a.B[k]*m)*.35+72*.65];
+      for(let i=0;i<trk.length;i+=3){tV.push(trk[i]*s+px,(trk[i+1]+.5)*s+gh,trk[i+2]*s+pz);tC.push(.345,.227,.141);}
+      for(let i=0;i<can.length;i+=3){const sh=.8+.3*((can[i+1]*.9+1.55-.6)/2);
+        tV.push(can[i]*s+px,(can[i+1]*.9+1.55)*s+gh,can[i+2]*s+pz);
+        tC.push(Math.min(1,lc[0]*sh/255),Math.min(1,lc[1]*sh/255),Math.min(1,lc[2]*sh/255));}}
+    const veg=new THREE.Mesh(mkGeom(tV,null,tC),vcMat()); veg.name='vegetacion'; group.add(veg);
+  }
+  // edificios
+  if(a.buildings.length){
+    const bv=[],bc=[]; const tri=(p0,p1,p2,c)=>{bv.push(...p0,...p1,...p2);for(let i=0;i<3;i++)bc.push(...c);};
+    const quad=(p0,p1,p2,p3,c)=>{tri(p0,p1,p2,c);tri(p0,p2,p3,c);};
+    for(const b of a.buildings){
+      const w=b.w*sx,d=b.h*sx,hg=Math.max(3,Math.min(w,d)*.55),rg=hg*.45,cx=b.cx*sx,cz=b.cy*sz;
+      const g0=sampleGrid(y,nx,ny,b.cx/W*(nx-1),b.cy/H*(ny-1))-.3, k=Math.round(b.cy)*W+Math.round(b.cx);
+      const rc=[a.R[k]*.9/255,a.G[k]*.9/255,a.B[k]*.9/255], wc=[.91,.88,.8], x0=cx-w/2,x1=cx+w/2,z0=cz-d/2,z1=cz+d/2,ya=g0,yb=g0+hg,yr=yb+rg,o=.3;
+      quad([x0,ya,z1],[x1,ya,z1],[x1,yb,z1],[x0,yb,z1],wc); quad([x1,ya,z0],[x0,ya,z0],[x0,yb,z0],[x1,yb,z0],wc);
+      quad([x0,ya,z0],[x0,ya,z1],[x0,yb,z1],[x0,yb,z0],wc); quad([x1,ya,z1],[x1,ya,z0],[x1,yb,z0],[x1,yb,z1],wc);
+      quad([x0-o,yb,z1+o],[x1+o,yb,z1+o],[x1+o,yr,cz],[x0-o,yr,cz],rc); quad([x1+o,yb,z0-o],[x0-o,yb,z0-o],[x0-o,yr,cz],[x1+o,yr,cz],rc);
+      tri([x0-o,yb,z0-o],[x0-o,yr,cz],[x0-o,yb,z1+o],rc); tri([x1+o,yb,z1+o],[x1+o,yr,cz],[x1+o,yb,z0-o],rc);}
+    const bm=new THREE.Mesh(mkGeom(bv,null,bc),vcMat()); bm.name='edificios'; group.add(bm);
+  }
+  group.userData={du,tris:group.children.reduce((s,m)=>s+(m.geometry.index?m.geometry.index.count:m.geometry.attributes.position.count)/3,0)};
+  return group;
+}
+
+/* ---------------- imagen de ejemplo (campo de naranjos) ---------------- */
+function sampleCanvas(){
+  const W=1400,H=1050,c=document.createElement('canvas'); c.width=W;c.height=H; const x=c.getContext('2d');
+  let seed=3; const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+  x.fillStyle='#bfaf78'; x.fillRect(0,0,W,H);
+  for(let i=0;i<260;i++){x.fillStyle=`rgba(${rnd()<.5?'210,195,130':'160,145,90'},.10)`;x.beginPath();x.arc(rnd()*W,rnd()*H,40+rnd()*90,0,7);x.fill();}
+  x.fillStyle='#ebe0c8'; x.fillRect(0,560,W,40); x.fillRect(700,0,30,H);
+  x.lineWidth=40; x.strokeStyle='#3c78a0'; x.beginPath();
+  for(let i=0;i<=W;i+=10){const yy=645+18*Math.sin(i/190); i?x.lineTo(i,yy):x.moveTo(i,yy);} x.lineWidth=24; x.strokeStyle='#3d78b8'; x.stroke();
+  const orch=(x0,y0,x1,y1,st=34)=>{for(let yy=y0+st/2;yy<y1;yy+=st)for(let xx=x0+st/2;xx<x1;xx+=st){
+    const cx=xx+(rnd()*6-3),cy=yy+(rnd()*6-3),r=12+rnd()*3;
+    x.fillStyle='rgba(60,70,50,.75)';x.beginPath();x.arc(cx+6,cy+6,r,0,7);x.fill();
+    x.fillStyle=`rgb(40,${95+rnd()*30|0},40)`;x.beginPath();x.arc(cx,cy,r,0,7);x.fill();
+    x.fillStyle='rgb(70,140,50)';x.beginPath();x.arc(cx-3,cy-3,r/2,0,7);x.fill();}};
+  [[80,80,640,500],[780,80,1320,500],[780,680,1320,980]].forEach(b=>orch(...b));
+  [[110,700,70,50,'#be463c'],[230,740,55,45,'#aa3c32'],[400,720,50,40,'#e1e1e1']].forEach(([a,b,w,h,col])=>{x.fillStyle=col;x.fillRect(a,b,w,h);});
+  return c;
+}
+
+/* ---------------- escena ---------------- */
+const stage=$('stage'), cv=$('gl');
+const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(Math.min(2,devicePixelRatio||1));
+const scene=new THREE.Scene(), camera=new THREE.PerspectiveCamera(35,4/3,1,5000);
+scene.add(new THREE.HemisphereLight(0xffffff,0x887766,0.55));
+const sun=new THREE.DirectionalLight(0xffffff,0.8); sun.position.set(-200,400,300); scene.add(sun);
+const controls=new THREE.OrbitControls(camera,cv); controls.enableDamping=true; controls.maxPolarAngle=Math.PI*0.49;
+let model=null, state={a:null,trees:[],tex:null,fresh:true};
+function resize(){const w=stage.clientWidth,h=stage.clientHeight; if(!w||!h)return; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix();}
+new ResizeObserver(resize).observe(stage);
+function frame(du){controls.target.set(WU/2,BASE*.7,du/2); camera.position.set(WU*.85,WU*.75,du*1.9+60); controls.update();}
+(function loop(){requestAnimationFrame(loop); controls.autoRotate=$('spin').checked; controls.autoRotateSpeed=1.2; controls.update(); renderer.render(scene,camera);})();
+
+/* ---------------- flujo ---------------- */
+const P=()=>({relief:+$('relief').value, r:+$('spacing').value, tsize:+$('tsize').value});
+function labels(){const p=P();$('o-relief').textContent=p.relief;$('o-spacing').textContent=p.r+' px';$('o-tsize').textContent='×'+p.tsize.toFixed(1);}
+function thumbs(img){
+  const s=$('cv-src'),g=s.getContext('2d'); g.drawImage(img,0,0,s.width,s.height);
+  const a=state.a, t=$('cv-seg'), x=t.getContext('2d'), k=t.width/a.W; x.drawImage(img,0,0,t.width,t.height);
+  const id=x.getImageData(0,0,t.width,t.height), d=id.data;
+  for(let j=0;j<t.height;j++)for(let i=0;i<t.width;i++){const q=Math.floor(j/k)*a.W+Math.floor(i/k),o=(j*t.width+i)*4;
+    if(a.water[q]){d[o]=30;d[o+1]=120;d[o+2]=255;} else if(a.road[q]){d[o]=255;d[o+1]=210;d[o+2]=210;}}
+  x.putImageData(id,0,0);
+  x.fillStyle='#ff3030'; for(const [tx,ty] of state.trees) x.fillRect(tx*k-1,ty*k-1,2,2);
+  x.strokeStyle='#ffd400'; x.lineWidth=1.5; for(const b of a.buildings) x.strokeRect(b.x0*k,b.y0*k,b.w*k,b.h*k);
+}
+function rebuild(){
+  if(!state.a)return; const p=P(); p.r=+$('spacing').value;
+  if(model){scene.remove(model); model.traverse(o=>{if(o.geometry)o.geometry.dispose();});}
+  model=build(state.a,state.trees,p,state.tex); scene.add(model);
+  if(state.fresh){frame(model.userData.du); state.fresh=false;}
+  $('s-trees').textContent=state.trees.length.toLocaleString('es'); $('s-bld').textContent=state.a.buildings.length;
+  $('s-water').textContent=(state.a.pct.water*100).toFixed(1)+' %'; $('s-road').textContent=(state.a.pct.road*100).toFixed(1)+' %';
+  $('s-tri').textContent=Math.round(model.userData.tris).toLocaleString('es');
+}
+function load(img,label){
+  $('busy').hidden=false; $('badge').textContent=label;
+  setTimeout(()=>{ try{
+    const tc=document.createElement('canvas'), s=Math.min(1,TEX/Math.max(img.width,img.height));
+    tc.width=Math.round(img.width*s); tc.height=Math.round(img.height*s); tc.getContext('2d').drawImage(img,0,0,tc.width,tc.height);
+    state.tex=tc; state.a=analyze(tc); state.trees=detectTrees(state.a,+$('spacing').value); state.fresh=true;
+    thumbs(tc); rebuild(); $('msg').textContent='';
+  }catch(e){ $('msg').textContent='No se pudo procesar la imagen.'; console.error(e);} $('busy').hidden=true; },30);
+}
+function fromFile(f){ if(!f||!f.type.startsWith('image/'))return;
+  const url=URL.createObjectURL(f), im=new Image(); im.onload=()=>{load(im,'Tu escaneo');URL.revokeObjectURL(url);};
+  im.onerror=()=>{$('msg').textContent='No se pudo leer esa imagen.';}; im.src=url; }
+$('file').addEventListener('change',e=>{fromFile(e.target.files[0]); e.target.value='';});
+$('demo').addEventListener('click',()=>load(sampleCanvas(),'Ejemplo'));
+const drop=$('drop');
+['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('over');}));
+['dragleave','drop'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove('over');}));
+drop.addEventListener('drop',e=>fromFile(e.dataTransfer.files[0]));
+let tm; const later=fn=>()=>{labels();clearTimeout(tm);tm=setTimeout(fn,140);};
+$('relief').addEventListener('input',later(rebuild)); $('tsize').addEventListener('input',later(rebuild));
+$('spacing').addEventListener('input',later(()=>{ if(!state.a)return; state.trees=detectTrees(state.a,+$('spacing').value); thumbs(state.tex); rebuild();}));
+
+/* ---------------- exportación ---------------- */
+async function save(filename,data){
+  try{ const dl=await claude.use('downloads'); if(!dl){$('msg').textContent='La descarga no está disponible en esta vista.';return;}
+    await dl.save({filename,data}); $('msg').textContent='Guardado: '+filename;
+  }catch(e){ $('msg').textContent=e&&e.code==='declined'?'Descarga cancelada.':'No se pudo guardar el archivo.'; }
+}
+$('dl').addEventListener('click',()=>{ if(!model)return; $('msg').textContent='Generando GLB…';
+  const root=new THREE.Scene(); root.name='world'; const clone=model.clone(); root.add(...clone.children.slice());
+  new THREE.GLTFExporter().parse(root,async buf=>{
+    const z=new JSZip(); z.file('maqueta.glb',buf); const blob=await z.generateAsync({type:'blob',compression:'DEFLATE'});
+    save('maqueta.zip',blob);
+  },{binary:true});
+});
+$('png').addEventListener('click',()=>{ renderer.render(scene,camera);
+  cv.toBlob(b=>{ if(b)save('maqueta.png',b); }); });
+
+labels(); resize();
+load(sampleCanvas(),'Ejemplo');
+})();
+</script>
+
+</body></html>
